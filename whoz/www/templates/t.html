@@ -1,0 +1,22 @@
+<html>
+
+request.path : {{request.path}}{{g.EXTRA_PATH}}
+<pre>
+request.path : {{request.path}}
+request.full_path : {{request.full_path}}
+request.script_root : {{request.script_root}}
+request.url : {{request.url}}
+request.base_url : {{request.base_url}}
+request.blueprint : {{request.blueprint}}
+url_root : {{request.url_root}}
+
+    g.URL_BASE : {{g.URL_BASE}}
+
+{% for r in request.environ %}
+{{r}}: {{request.environ[r]}}
+{%endfor %}
+
+</pre>
+
+
+</html>

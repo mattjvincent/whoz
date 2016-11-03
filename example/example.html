@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Example WHOZ API call</title>
+</head>
+<body>
+
+<div id="example">
+</div>
+
+<script src="jquery-2.0.3.min.js"></script>
+<script src="http://127.0.0.1:9010/js/whoz_api.js"></script>
+
+<script>
+<!--
+
+$().ready(function() {
+    var WHOZ = new whoz({search_limit:100});
+
+    WHOZ.search("chr1:1-1000000000", {species: 'Mm'}, function(data) {
+
+        var html = "";
+        for (var d in data) {
+            html += data[d].ensembl_gene_id;
+            html += "\t";
+            html += data[d].symbol;
+            html += "\n";
+        }
+        $("#example").append("<pre>" + html + "</pre>");
+
+    });
+});
+//-->
+</script>
+
+</body>
+</html>
