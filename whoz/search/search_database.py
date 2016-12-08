@@ -158,8 +158,8 @@ SQL_REGION = '''
 SELECT *
   FROM ensembl_genes e
  WHERE e.chromosome = :chromosome
-   AND e.start_position >= :start_position
-   AND e.end_position <= :end_position
+   AND e.start_position <= :end_position
+   AND e.end_position >= :start_position
  ORDER BY cast(replace(replace(replace(e.chromosome, 'X', '50'), 'Y', '51'), 'MT', 51) AS int), e.start_position, e.end_position
 '''
 
@@ -167,8 +167,8 @@ SQL_REGION_MM = '''
 SELECT *
   FROM ensembl_genes e
  WHERE e.chromosome = :chromosome
-   AND e.start_position >= :start_position
-   AND e.end_position <= :end_position
+   AND e.start_position <= :end_position
+   AND e.end_position >= :start_position
    AND e.species_id = 'Mm'
  ORDER BY cast(replace(replace(replace(e.chromosome, 'X', '50'), 'Y', '51'), 'MT', 51) AS int), e.start_position, e.end_position
 '''
@@ -177,8 +177,8 @@ SQL_REGION_HS = '''
 SELECT *
   FROM ensembl_genes e
  WHERE e.chromosome = :chromosome
-   AND e.start_position >= :start_position
-   AND e.end_position <= :end_position
+   AND e.start_position <= :end_position
+   AND e.end_position >= :start_position
    AND e.species_id = 'Hs'
  ORDER BY cast(replace(replace(replace(e.chromosome, 'X', '50'), 'Y', '51'), 'MT', 51) AS int), e.start_position, e.end_position
 '''
@@ -295,9 +295,11 @@ class Result:
     """ Simple class to encapsulate a Query and matches
 
     """
-    def __init__(self, query=None, matches=[]):
+    def __init__(self, query=None, matches=[], num_results=None):
         self.query = query
         self.matches = matches
+        self.num_matches = len(matches)
+        self.num_results = num_results
 
 
 def str2bool(v):
@@ -495,7 +497,7 @@ def _get_query(term, species_id=None, exact=True, verbose=False):
     return query, status
 
 
-def _query(query, limit=1000000):
+def _query(query, limit=None):
     status = get_status()
 
     if not query:
@@ -503,7 +505,7 @@ def _query(query, limit=1000000):
 
     matches = []
 
-    limit = nvli(limit, 1000000)
+    ilimit = nvli(limit, -1)
 
     try:
         conn = connect_to_database()
@@ -542,14 +544,16 @@ def _query(query, limit=1000000):
 
             matches.append(match)
 
-            if len(matches) >= limit:
-                break
-
         cursor.close()
     except sqlite3.Error as e:
         return None, get_status(True, 'Database Error: ' + str(e))
 
-    return Result(query, matches), status
+    num_matches = len(matches)
+
+    if limit and len(matches) > ilimit:
+        matches = matches[:ilimit]
+
+    return Result(query, matches, num_matches), status
 
 
 def search(term, species_id=None, exact=True, verbose=False, limit=None):
@@ -696,7 +700,6 @@ def get_id(id, verbose=False):
         return None, status
 
     return results, status
-
 
 
 

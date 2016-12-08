@@ -82,10 +82,13 @@ def search(filename, term, exact, display, max, species, verbose):
 
     search_database.DATABASE = filename
 
+    maximum = max if max >= 0 else None
+
     tstart = time.time()
-    result, status = search_database.search(term, species, exact, False)
+    result, status = search_database.search(term, species, exact, False, maximum)
     tend = time.time()
 
+    LOG.debug("Num Results: {}".format(result.num_results))
     count = 0
 
     if status.error:

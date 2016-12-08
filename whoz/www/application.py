@@ -12,7 +12,6 @@ import time
 from flask import Flask, render_template, request, Response, make_response, g, redirect, url_for
 from flask_restful import reqparse, Resource, Api, fields, marshal_with, marshal_with_field
 from flask_cors import CORS
-import requests
 
 from whoz.search import search_database
 import whoz.utils as utils
@@ -71,6 +70,28 @@ MATCH_FIELDS = {
     'match_reason': fields.String,
     'match_value': fields.String
 }
+
+RESULT_FIELDS = {
+    'num_results': fields.Integer,
+    'num_matches': fields.Integer,
+    'matches': fields.List(fields.Nested(MATCH_FIELDS))
+}
+
+REQUEST_FIELDS = {
+    'term': fields.String,
+    'species': fields.String,
+    'exact': fields.Boolean,
+    'limit': fields.Integer,
+    'callback': fields.String
+}
+
+RETURN_FIELDS = {
+    'request': fields.Nested(REQUEST_FIELDS),
+    'result': fields.Nested(RESULT_FIELDS)
+}
+
+
+
 
 def str2bool(val):
     return str(val).lower() in ['true', '1', 't', 'y', 'yes']
@@ -147,7 +168,7 @@ class Search(Resource):
         self.reqparse = reqparse.RequestParser()
         super(Search, self).__init__()
 
-    @marshal_with(MATCH_FIELDS, envelope='genes')
+    @marshal_with(RETURN_FIELDS)
     def get(self):
         LOG.info("Call for: GET /search/")
         start = time.time()
@@ -169,17 +190,15 @@ class Search(Resource):
 
         LOG.info("Search time: {}".format(format_time(start, time.time())))
 
-        count = 0
-
         if status.error:
             LOG.error("Error occurred: {}".format(status.message))
             return
 
         if len(result.matches) == 0:
             LOG.info("No results found")
-            return []
+            return {'request': data, 'result': result}
 
-        return result.matches
+        return {'request': data, 'result': result}
 
 
 @app.route("/js/whoz_api.js")

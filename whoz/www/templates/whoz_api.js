@@ -7,8 +7,7 @@
     this.whoz = function() {
 
         // Create global element references
-        this.results = null;
-
+        this.response = null;
 
         // Define option defaults
         var defaults = {
@@ -17,7 +16,7 @@
             search_limit: 1000,
             search_exact: false,
             //jquery_url: '{{g.URL_BASE}}/js/jquery.js'
-        }
+        };
 
         console.log(defaults);
 
@@ -33,14 +32,14 @@
         // init anything else
         initialize.call(this);
 
-    }
+    };
 
   // Public Methods
 
   whoz.prototype.search = function(term, options, callback) {
       var _ = this;
       var $ = window.$ || window.JQuery;
-      _.results = null;
+      _.response = null;
 
       var search_data = {
           term: term,
@@ -67,10 +66,10 @@
           console.log('data', data);
           console.log('textStatus', textStatus);
           console.log('jqXHR', jqXHR);
-          _.results = data.genes;
+          _.response = data;
 
           if (callback) {
-              callback(data.genes);
+              callback(data);
           }
 
       }).fail(function (jqXHR, textStatus, errorThrown) {
@@ -104,8 +103,8 @@
         //console.log('check_jquery');
         var jquery = window.$ || window.JQuery;
         if (jquery === undefined || jquery.fn.jquery !== '2.0.3') {
-            loadfile(this.options.jquery_url, 'js');//, main);
-            console.log('jquery: loaded');
+            //loadfile(this.options.jquery_url, 'js');//, main);
+            //console.log('jquery: loaded');
         } else {
             //main();
         }
