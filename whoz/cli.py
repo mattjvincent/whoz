@@ -85,7 +85,7 @@ def search(filename, term, exact, display, max, species, verbose):
     maximum = max if max >= 0 else None
 
     tstart = time.time()
-    result, status = search_database.search(term, species, exact, False, maximum)
+    result, status = search_database.search(filename, term, species, exact, False, maximum)
     tend = time.time()
 
     LOG.debug("Num Results: {}".format(result.num_results))
@@ -146,8 +146,6 @@ def search(filename, term, exact, display, max, species, verbose):
 
     LOG.info("Search time: {}".format(format_time(tstart, tend)))
 
-    #click.echo('serving db %s fires to %s,%s' % (ship, x, y))
-
 
 @cli.command('id', short_help='get by id')
 @click.argument('filename', metavar='<filename>', type=click.Path(exists=True, resolve_path=True, dir_okay=False))
@@ -162,10 +160,8 @@ def id(filename, ensembl_id, verbose):
     LOG.info("Search database: {}".format(filename))
     LOG.debug("Ensembl ID: {}".format(ensembl_id))
 
-    search_database.DATABASE = filename
-
     tstart = time.time()
-    result, status = search_database.get_id(ensembl_id, verbose=verbose)
+    result, status = search_database.get_id(filename, ensembl_id, verbose=verbose)
     tend = time.time()
 
     if status.error:
@@ -191,4 +187,6 @@ def server(config, verbose):
 
 if __name__ == '__main__':
     cli()
+
+
 

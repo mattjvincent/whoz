@@ -4,16 +4,20 @@
 
 from __future__ import print_function
 
-import json
+
+from collections import OrderedDict
+import glob
 import os
 import sys
 import time
 
-from flask import Flask, render_template, request, Response, make_response, g, redirect, url_for
-from flask_restful import reqparse, Resource, Api, fields, marshal_with, marshal_with_field
+
+from flask import Flask, render_template, request, Response, make_response, g, redirect, url_for, jsonify
+from flask_restful import reqparse, Resource, Api, fields, marshal_with, marshal_with_field, abort
 from flask_cors import CORS
 
 from whoz.search import search_database
+from whoz.search import batch_database
 import whoz.utils as utils
 
 LOG = utils.get_logger()
@@ -21,11 +25,19 @@ LOG = utils.get_logger()
 app = Flask(__name__)
 CORS(app)
 api = Api(app)
+"""
+Get a list of all files in ``directory``.
 
+:param str directory: a directory
+:param list file_extensions: a list of file extensions to match, None means all
+
+:return: a list of all files
+"""
 
 def support_jsonp(api_instance, callback_name_source='callback'):
-    """Let API instance can respond jsonp request automatically.
-    `callback_name_source` can be a string or a callback.
+    """Let API instance respond to jsonp requesta automatically.
+
+    :param str callback_name_source: can be a string or a callback
         If it is a string, the system will find the argument that named by this string in `query string`.
          If found, determine this request to be a jsonp request, and use the argument's value as the js callback name.
         If `callback_name_source` is a callback, this callback should return js callback name when request
@@ -91,6 +103,39 @@ RETURN_FIELDS = {
 }
 
 
+def get_all_whoz_dbs(dir):
+    file_str = os.path.join(dir, 'whoz.*.db3')
+    dbs = glob.glob(file_str)
+
+    db_vers = []
+    db_temp = {}
+
+    # get the versions
+    for db in dbs:
+        version = int(db.split(".")[-2])
+        db_vers.append(version)
+        db_temp[version] = db
+
+    db_vers.sort()
+
+    all_sorted_dbs = OrderedDict()
+
+    default = None
+    for version in db_vers:
+        all_sorted_dbs[version] = db_temp[version]
+        default = db_temp[version]
+
+    return default, all_sorted_dbs
+
+
+def get_whoz_db(version=None):
+    try:
+        if version:
+            return CONF.ALL_WHOZ_DB[int(version)]
+
+        return CONF.DEFAULT_WHOZ_DB
+    except:
+        return None
 
 
 def str2bool(val):
@@ -134,16 +179,20 @@ class ID(Resource):
         self.reqparse = reqparse.RequestParser()
         super(ID, self).__init__()
 
-    def get(self, id):
+    def get(self, id, version=None):
         start = time.time()
 
-        result, status = search_database.get_id(id)
+        db = get_whoz_db(version)
+
+        if not db:
+            abort(500, message='Version {} not supported'.format(version))
+
+        result, status = batch_database.get_id(db, id)
         LOG.debug("Search time: {}".format(format_time(start, time.time())))
 
         if status.error:
             LOG.debug("Error occurred: {}".format(status.message))
-            return
-
+            abort(500, message=status.message)
 
         return result
 
@@ -169,7 +218,7 @@ class Search(Resource):
         super(Search, self).__init__()
 
     @marshal_with(RETURN_FIELDS)
-    def get(self):
+    def get(self, version=None):
         LOG.info("Call for: GET /search/")
         start = time.time()
 
@@ -178,21 +227,22 @@ class Search(Resource):
         self.reqparse.add_argument('exact', type=str, required=False, location='args')
         self.reqparse.add_argument('limit', type=int, required=False, location='args')
         self.reqparse.add_argument('callback', type=str, required=False, location='args')
-        #self.reqparse.add_argument('start', type=str, required=False, location='args')
 
         data = self.reqparse.parse_args()
 
-        result, status = search_database.search(term=data['term'],
+        db = get_whoz_db(version)
+
+        if not db:
+            abort(500, message='Version {} not supported. Try calling /versions'.format(version))
+
+        result, status = search_database.search(database=db,
+                                                term=data['term'],
                                                 species_id=data.get('species', None),
                                                 exact=str2bool(data.get('exact', '0')),
                                                 limit=data.get('limit', 1000000),
                                                 verbose=True)
 
         LOG.info("Search time: {}".format(format_time(start, time.time())))
-
-        if status.error:
-            LOG.error("Error occurred: {}".format(status.message))
-            return
 
         if len(result.matches) == 0:
             LOG.info("No results found")
@@ -204,6 +254,12 @@ class Search(Resource):
 @app.route("/js/whoz_api.js")
 def whoz_api_js():
     return render_template('whoz_api.js'), 200, {'Content-Type': 'application/javascript'}
+
+
+@app.route("/versions")
+def versions():
+    versions = [k for k, v in CONF.ALL_WHOZ_DB.items()]
+    return jsonify({'versions': versions})
 
 
 @app.route("/")
@@ -221,8 +277,7 @@ def index():
     return redirect(url_for('search'))
 
 
-def run(settings=None):
-    settings_dir = os.path.dirname(settings)
+def run(settings):
     app.config.from_pyfile(settings)
 
     host = app.config['HOST'] if 'HOST' in app.config else '0.0.0.0'
@@ -230,37 +285,41 @@ def run(settings=None):
     threaded = app.config['THREADED'] if 'THREADED' in app.config else True
     debug = app.config['DEBUG'] if 'DEBUG' in app.config else True
 
-    # let's attempt to make sure all files are where they are supposed to be
-    if 'WHOZ_DB' not in app.config:
-        LOG.error('WHOZ_DB not configured in: {}'.format(settings_dir))
+    if 'WHOZ_DIR' not in app.config:
+        LOG.error('WHOZ_DIR not configured')
         sys.exit()
 
-    whoz_db = app.config['WHOZ_DB']
-    if not os.path.isabs(whoz_db):
-        LOG.debug('WHOZ DB specified as relative path: {}'.format(whoz_db))
-        whoz_db = os.path.abspath(os.path.join(settings_dir, whoz_db))
+    whoz_dir = app.config['WHOZ_DIR']
+
+    if not os.path.isabs(whoz_dir):
+        LOG.debug('WHOZ DIR specified as relative path: {}'.format(whoz_dir))
+        whoz_dir = os.path.abspath(os.path.join(os.getcwd(), whoz_dir))
     else:
-        LOG.debug('WHOZ DB specified as absolute path: {}'.format(whoz_db))
-        whoz_db = os.path.abspath(whoz_db)
+        LOG.debug('WHOZ DIR specified as absolute path: {}'.format(whoz_dir))
+        whoz_dir = os.path.abspath(whoz_dir)
 
-
-    if not os.path.exists(whoz_db):
-        LOG.error('Specified WHOZ_DB does not exist: {}'.format(whoz_db))
+    if not os.path.exists(whoz_dir):
+        LOG.error('Specified WHOZ_DIR does not exist: {}'.format(whoz_dir))
         sys.exit()
 
-    LOG.info('Database: {}'.format(whoz_db))
+    if not os.path.isdir(whoz_dir):
+        LOG.error('Specified WHOZ_DIR is not a directory: {}'.format(whoz_dir))
+        sys.exit()
 
+    CONF.DEFAULT_WHOZ_DB, CONF.ALL_WHOZ_DB = get_all_whoz_dbs(whoz_dir)
+
+    LOG.debug("All databases...")
+    for ver, db in CONF.ALL_WHOZ_DB.items():
+        LOG.debug('{}: {}'.format(ver, db))
+    LOG.debug('Default database: {}'.format(get_whoz_db()))
     LOG.debug('host={}'.format(host))
     LOG.debug('port={}'.format(port))
     LOG.debug('threaded={}'.format(threaded))
     LOG.debug('debug={}'.format(debug))
-    LOG.debug('settings directory={}'.format(settings_dir))
-    LOG.debug('database={}'.format(whoz_db))
+    LOG.debug('whoz_dir={}'.format(whoz_dir))
 
-    search_database.DATABASE = whoz_db
-
-    api.add_resource(ID, '/id/<id>', '/id/<id>/')
-    api.add_resource(Search, '/search')
+    api.add_resource(ID, '/<version>/gene/<id>', '/<version>/gene/<id>/' )
+    api.add_resource(Search, '/<version>/search', '/search')
 
     app.run(host=host, port=port, threaded=threaded, debug=debug)
 

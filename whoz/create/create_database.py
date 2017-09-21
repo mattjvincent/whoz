@@ -119,7 +119,7 @@ def execute(ensembl_version, database_file):
         t = time.strftime("%Y-%m-%d.%H_%M_%S")
         prefix = ".{}_{}_".format(ensembl_version, t)
         #temp_dir = os.path.abspath(tempfile.mkdtemp(dir='.', prefix=prefix))
-        temp_dir = '/Users/mvincent/work_new/for_prod/whoz/datawork'
+        temp_dir = '/Users/mvincent/work_new/for_prod/whoz/data_work'
 
 
         LOG.info('Using temporary directory: {}'.format(temp_dir))
@@ -134,34 +134,34 @@ def execute(ensembl_version, database_file):
         hugo_genes = os.path.join(temp_dir, 'hugo.genes.txt')
         hugo_synonyms = os.path.join(temp_dir, 'hugo.synonyms.txt')
 
-        #delete_file(ensembl_genes)
-        #delete_file(ensembl_gtep)
-        #delete_file(mgi_genes)
-        #delete_file(mgi_synonyms)
-        #delete_file(mgi_synonyms_oneline)
-        #delete_file(mgi_ensemblids)
-        #delete_file(hugo_genes)
-        #delete_file(hugo_synonyms)
+        delete_file(ensembl_genes)
+        delete_file(ensembl_gtep)
+        delete_file(mgi_genes)
+        delete_file(mgi_synonyms)
+        delete_file(mgi_synonyms_oneline)
+        delete_file(mgi_ensemblids)
+        delete_file(hugo_genes)
+        delete_file(hugo_synonyms)
 
         LOG.info('Downloading data...')
 
         LOG.info('Extracting Ensembl data...')
 
-        #ensembl_biomart.extract_genes(ensembl_version, 'Mm', ensembl_genes)
-        #ensembl_biomart.extract_genes(ensembl_version, 'Hs', ensembl_genes, append=True)
-        #ensembl_biomart.extract_gtep(ensembl_version, 'Mm', ensembl_gtep)
-        #ensembl_biomart.extract_gtep(ensembl_version, 'Hs', ensembl_gtep, append=True)
+        ensembl_biomart.extract_genes(ensembl_version, 'Mm', ensembl_genes)
+        ensembl_biomart.extract_genes(ensembl_version, 'Hs', ensembl_genes, append=True)
+        ensembl_biomart.extract_gtep(ensembl_version, 'Mm', ensembl_gtep)
+        ensembl_biomart.extract_gtep(ensembl_version, 'Hs', ensembl_gtep, append=True)
 
         LOG.info('Extracting MGI data...')
 
-        #mgi_intermine.extract_genes(mgi_genes)
-        #mgi_intermine.extract_synonyms(mgi_synonyms)
-        #mgi_intermine.extract_synonyms_one_line(mgi_synonyms_oneline)
-        #mgi_intermine.extract_ensembl_ids(mgi_ensemblids)
+        mgi_intermine.extract_genes(mgi_genes)
+        mgi_intermine.extract_synonyms(mgi_synonyms)
+        mgi_intermine.extract_synonyms_one_line(mgi_synonyms_oneline)
+        mgi_intermine.extract_ensembl_ids(mgi_ensemblids)
 
         LOG.info('Extracting HUGO data...')
 
-        #hugo_util.extract_data(hugo_temp, hugo_genes, hugo_synonyms)
+        hugo_util.extract_data(hugo_temp, hugo_genes, hugo_synonyms)
 
         ensembl_genes_sql = os.path.join(temp_dir, 'ensembl.genes.sql')
         ensembl_gtep_sql = os.path.join(temp_dir, 'ensembl.gtep.sql')
