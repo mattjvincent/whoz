@@ -17,7 +17,6 @@ if sys.version_info > (3,):
 
 
 
-
 SQL_ID_FULL = '''
 SELECT *
   FROM ensembl_genes e,
@@ -31,6 +30,15 @@ WHERE e.ensembl_gene_id = g.gene_id
             OR gtep.exon_id = :term
             OR gtep.protein_id = :term)
  ORDER BY e._ensembl_genes_key
+'''
+
+SQL_ID_GENES = '''
+SELECT *
+  FROM ensembl_genes e
+'''
+
+SQL_ID_GENES_SPECIES = '''
+WHERE lower(e.species_id) = lower(:species_id)
 '''
 
 
@@ -151,6 +159,38 @@ def get_id(database, id, verbose=False):
         return None, status
 
     return results, status
+
+
+def get_genes(database, species_id=None, verbose=False):
+    if verbose:
+        LOG.debug('species_id={}'.format(str(species_id)))
+
+    variables = {}
+    status = sd.get_status()
+    query = SQL_ID_GENES
+
+    if species_id:
+        query += SQL_ID_GENES_SPECIES
+        variables['species_id'] = species_id
+
+    if verbose:
+        LOG.debug(str(query))
+
+    results = []
+    try:
+        conn = sd.connect_to_database(database)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        for row in cursor.execute(query, variables):
+            results.append(utils.dictify_row(cursor, row))
+
+        return results, status
+    except sqlite3.Error as e:
+        return None, sd.get_status(True, 'Database Error: ' + str(e))
+
+
+
 
 
 

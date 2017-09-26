@@ -15,7 +15,6 @@
             search_species: null,
             search_limit: 1000,
             search_exact: false,
-            //jquery_url: '{{g.URL_BASE}}/js/jquery.js'
         };
 
         console.log(defaults);

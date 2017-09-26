@@ -212,6 +212,29 @@ class ID(Resource):
         return content, 501
 
 
+class Genes(Resource):
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        super(Genes, self).__init__()
+
+    def get(self, species_id=None, version=None):
+        start = time.time()
+
+        db = get_whoz_db(version)
+
+        if not db:
+            abort(500, message='Version {} not supported'.format(version))
+
+        result, status = batch_database.get_genes(db, species_id, True)
+        LOG.debug("Search time: {}".format(format_time(start, time.time())))
+
+        if status.error:
+            LOG.debug("Error occurred: {}".format(status.message))
+            abort(500, message=status.message)
+
+        return result
+
+
 class Search(Resource):
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
@@ -319,6 +342,7 @@ def run(settings):
     LOG.debug('whoz_dir={}'.format(whoz_dir))
 
     api.add_resource(ID, '/<version>/gene/<id>', '/<version>/gene/<id>/' )
+    api.add_resource(Genes, '/<version>/genes', '/<version>/genes' )
     api.add_resource(Search, '/<version>/search', '/search')
 
     app.run(host=host, port=port, threaded=threaded, debug=debug)

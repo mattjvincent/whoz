@@ -7,26 +7,13 @@ import click
 import json
 from tabulate import tabulate
 
-from whoz import utils
+from whoz.utils import configure_logging, format_time, get_logger
 from whoz.create import create_database
-from whoz.search import search_database
+from whoz.search import search_database, batch_database
 from whoz.www import application
 
-
-def format_time(start, end):
-    """
-    Format length of time between start and end.
-
-    :param start: the start time
-    :param end: the end time
-    :return: a formatted string of hours, minutes, and seconds
-    """
-    hours, rem = divmod(end-start, 3600)
-    minutes, seconds = divmod(rem, 60)
-    return "{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds)
-
-
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option()
@@ -47,8 +34,8 @@ def create(filename, version, verbose):
     """
     Creates a new annotation database <filename> using Ensembl <version>.
     """
-    utils.configure_logging(verbose)
-    LOG = utils.get_logger()
+    configure_logging(verbose)
+    LOG = get_logger()
     LOG.info("Creating database: {}".format(filename))
     LOG.info("Using Ensembl version: {}".format(version))
 
@@ -71,8 +58,8 @@ def search(filename, term, exact, display, max, species, verbose):
     """
     Search annotation database <filename> for <term>
     """
-    utils.configure_logging(verbose)
-    LOG = utils.get_logger()
+    configure_logging(verbose)
+    LOG = get_logger()
     LOG.info("Search database: {}".format(filename))
     LOG.debug("Term: {}".format(term))
     LOG.debug("Exact: {}".format(exact))
@@ -150,25 +137,95 @@ def search(filename, term, exact, display, max, species, verbose):
 @cli.command('id', short_help='get by id')
 @click.argument('filename', metavar='<filename>', type=click.Path(exists=True, resolve_path=True, dir_okay=False))
 @click.argument('ensembl_id', metavar='<ensembl_id>')
+@click.option('-f', '--format', 'display', default='pretty', type=click.Choice(['tab', 'csv', 'json', 'pretty']))
 @click.option('-v', '--verbose', count=True)
-def id(filename, ensembl_id, verbose):
+def id(filename, ensembl_id, display, verbose):
     """
     Get gene information from annotation database <filename> for <term>
     """
-    utils.configure_logging(verbose)
-    LOG = utils.get_logger()
+    configure_logging(verbose)
+    LOG = get_logger()
     LOG.info("Search database: {}".format(filename))
     LOG.debug("Ensembl ID: {}".format(ensembl_id))
 
     tstart = time.time()
-    result, status = search_database.get_id(filename, ensembl_id, verbose=verbose)
+    result, status = batch_database.get_id(filename, ensembl_id, verbose=verbose)
     tend = time.time()
 
     if status.error:
         print("Error occurred: {}".format(status.message))
         sys.exit(-1)
 
-    print(json.dumps({'data': result}, indent=4))
+    headers = ["ID", "SYMBOL", "NAME", "POSITION", "STRAND", "DESCRIPTION", "SYNONYMS"]
+
+    gene = result[0]
+
+    if display in ('tab', 'csv'):
+        delim = '\t' if display == 'tab' else ','
+        print(delim.join(headers))
+        line = list()
+        line.append(gene['id'])
+        line.append(gene['symbol'] if gene['symbol'] else '')
+        line.append(gene['name'] if gene['name'] else '')
+        line.append("{}:{}-{}".format(gene['chromosome'], gene['start'], gene['end']))
+        line.append(gene['strand'] if gene['strand'] else '')
+        line.append(gene['description'] if gene['description'] else '')
+        line.append(gene['synonyms'] if gene['synonyms'] else '')
+        print(delim.join(map(str, line)))
+    elif display == 'json':
+        tbl = []
+        line = list()
+        line.append(gene['id'])
+        line.append(gene['symbol'] if gene['symbol'] else '')
+        line.append(gene['name'] if gene['name'] else '')
+        line.append("{}:{}-{}".format(gene['chromosome'], gene['start'], gene['end']))
+        line.append(gene['strand'] if gene['strand'] else '')
+        line.append(gene['description'] if gene['description'] else '')
+        line.append(gene['synonyms'] if gene['synonyms'] else '')
+        tbl.append(dict(zip(headers, line)))
+        print(json.dumps({'data': tbl}, indent=4))
+    else:
+        tbl = []
+        line = list()
+        line.append(gene['id'])
+        line.append(gene['symbol'] if gene['symbol'] else '')
+        line.append(gene['name'] if gene['name'] else '')
+        line.append("{}:{}-{}".format(gene['chromosome'], gene['start'], gene['end']))
+        line.append(gene['strand'] if gene['strand'] else '')
+        line.append(gene['description'] if gene['description'] else '')
+        line.append(gene['synonyms'] if gene['synonyms'] else '')
+        tbl.append(line)
+        print(tabulate(tbl, headers))
+
+
+
+    LOG.info("Search time: {}".format(format_time(tstart, tend)))
+
+
+@cli.command('genes', short_help='get all genes')
+@click.argument('filename', metavar='<filename>', type=click.Path(exists=True, resolve_path=True, dir_okay=False))
+@click.option('-s', '--species', type=click.Choice(['mm', 'hs']))
+@click.option('-v', '--verbose', count=True)
+def genes(filename, species, verbose):
+    """
+    Get gene information from annotation database <filename> for <term>
+    """
+    configure_logging(verbose)
+    LOG = get_logger()
+    LOG.info("Search database: {}".format(filename))
+    LOG.debug("Species: {}".format(species))
+
+    tstart = time.time()
+    result, status = batch_database.get_genes(filename, species, verbose=verbose)
+    tend = time.time()
+
+    if status.error:
+        print("Error occurred: {}".format(status.message))
+        sys.exit(-1)
+
+    for r in result:
+        print(r)
+
 
     LOG.info("Search time: {}".format(format_time(tstart, tend)))
 
@@ -180,13 +237,11 @@ def server(config, verbose):
     """
     Start the web server using configuration specified in <config>.
     """
-    utils.configure_logging(verbose)
-    LOG = utils.get_logger()
+    configure_logging(verbose)
+    LOG = get_logger()
     LOG.info("Starting www server, using configuration: {}".format(config))
     application.run(config)
 
+
 if __name__ == '__main__':
     cli()
-
-
-
